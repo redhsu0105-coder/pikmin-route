@@ -1,151 +1,79 @@
-```html
 <!DOCTYPE html>
-<html>
+<html lang="zh-Hant">
 <head>
-<meta charset="utf-8">
-<title>Pikmin Bloom Route Generator</title>
-
-<style>
-
-body{
-font-family:Arial;
-background:#f2f2f2;
-padding:30px;
-max-width:800px;
-margin:auto
-}
-
-textarea{
-width:100%;
-height:200px;
-font-size:14px
-}
-
-button{
-padding:12px 20px;
-font-size:16px;
-margin-top:10px;
-cursor:pointer
-}
-
-.downloads a{
-display:block;
-margin-top:10px;
-font-size:16px
-}
-
-</style>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta charset="utf-8">
+    <title>皮克敏 WPT 綜合生成器 V3</title>
+    <style>
+        body { font-family: "Microsoft JhengHei", sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background-color: #f0f2f5; }
+        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h2 { color: #1b5e20; border-bottom: 2px solid #81c784; padding-bottom: 10px; }
+        textarea { width: 100%; height: 200px; margin: 15px 0; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-family: monospace; }
+        .btn-group { display: flex; gap: 10px; }
+        button { flex: 1; padding: 15px; cursor: pointer; background: #2e7d32; color: white; border: none; border-radius: 8px; font-weight: bold; }
+        button:hover { background: #1b5e20; }
+        .footer { margin-top: 20px; font-size: 0.85em; color: #666; background: #e8f5e9; padding: 10px; border-radius: 4px; }
+    </style>
 </head>
-
 <body>
+    <div class="card">
+        <h2>🌸 皮克敏路徑工具 V3</h2>
+        <p>請貼入座標點：</p>
+        <textarea id="coordsInput" placeholder="60.1228700, 11.4626370&#10;60.1206390, 11.4612330"></textarea>
 
-<h2>🌸 Pikmin Bloom WPT Route Generator</h2>
+        <div class="btn-group">
+            <button onclick="buildGPX()">生成綜合模式 (每個點Z字 + 2次串聯)</button>
+        </div>
 
-<p>貼上座標 (lat,lon 一行一個)</p>
+        <div class="footer">
+            <strong>邏輯：</strong><br>
+            1. 遍歷清單每個點，每個點原地執行 30m Z字型。<br>
+            2. 全部點跑完 Z 字後，再接續兩次完整的點對點直線串聯。
+        </div>
+    </div>
 
-<textarea id="coords"></textarea>
+    <script>
+        function buildGPX() {
+            const input = document.getElementById('coordsInput').value.trim();
+            if (!input) return alert('請輸入座標');
 
-<br>
+            const coords = input.split('\n').map(line => {
+                const parts = line.split(/[ ,]+/);
+                return { lat: parseFloat(parts[0]), lon: parseFloat(parts[1]) };
+            }).filter(c => !isNaN(c.lat));
 
-<button onclick="generate()">生成路徑</button>
+            let gpxBody = "";
+            const dLat = 0.00027; // 30m 垂直
+            const dLon = 0.00045; // 30m 水平
 
-<div class="downloads" id="downloads"></div>
+            // --- 步驟一：每個座標點跑一遍 Z 字型 ---
+            coords.forEach((c, i) => {
+                const idx = i + 1;
+                const lat = c.lat;
+                const lon = c.lon;
+                
+                // 定義該點的 Z 字航點順序
+                const pts = [
+                    {la: lat, lo: lon, n: `P${idx}-Z1`},
+                    {la: lat, lo: lon + dLon, n: `P${idx}-Z2`},
+                    {la: lat - dLat, lo: lon + dLon, n: `P${idx}-Z3`},
+                    {la: lat - dLat, lo: lon, n: `P${idx}-Z4`},
+                    {la: lat - (dLat*2), lo: lon, n: `P${idx}-Z5`},
+                    {la: lat - (dLat*2), lo: lon + dLon, n: `P${idx}-Z6`},
+                    {la: lat, lo: lon, n: `P${idx}-Return`} // 回到原中心點，準備去下一個大點
+                ];
 
-<script>
+                pts.forEach(p => {
+                    gpxBody += `  <wpt lat="${p.la.toFixed(8)}" lon="${p.lo.toFixed(8)}"><name>${p.n}</name></wpt>\n`;
+                });
+            });
 
-const R=6378137
+            // --- 步驟二：跑兩次完整的直線串聯 ---
+            for (let loop = 1; loop <= 2; loop++) {
+                coords.forEach((c, i) => {
+                    gpxBody += `  <wpt lat="${c.lat.toFixed(8)}" lon="${c.lon.toFixed(8)}"><name>Loop${loop}-P${i+1}</name></wpt>\n`;
+                });
+            }
 
-function offset(lat,lon,dx,dy){
-
-let dlat=(dy/R)*(180/Math.PI)
-
-let dlon=(dx/(R*Math.cos(lat*Math.PI/180)))*(180/Math.PI)
-
-return [lat+dlat,lon+dlon]
-
-}
-
-function zigzag(points,radius=30){
-
-let result=[]
-let toggle=1
-
-for(let i=0;i<points.length-1;i++){
-
-let [lat1,lon1]=points[i]
-let [lat2,lon2]=points[i+1]
-
-let dx=lon2-lon1
-let dy=lat2-lat1
-
-let len=Math.sqrt(dx*dx+dy*dy)
-if(len==0) continue
-
-let px=-dy/len
-let py=dx/len
-
-let ox=px*radius*toggle
-let oy=py*radius*toggle
-
-let p=offset(lat1,lon1,ox,oy)
-
-result.push([lat1,lon1])
-result.push(p)
-
-toggle*=-1
-
-}
-
-result.push(points[points.length-1])
-
-return result
-
-}
-
-function download(name,data){
-
-let text=data.map(p=>p[0]+","+p[1]).join("\n")
-
-let blob=new Blob([text],{type:"text/plain"})
-
-let a=document.createElement("a")
-
-a.href=URL.createObjectURL(blob)
-a.download=name
-a.innerText="下載 "+name
-
-document.getElementById("downloads").appendChild(a)
-
-}
-
-function generate(){
-
-let raw=document.getElementById("coords").value.trim().split("\n")
-
-let coords=[]
-
-raw.forEach(line=>{
-
-let p=line.split(",")
-
-coords.push([parseFloat(p[0]),parseFloat(p[1])])
-
-})
-
-let zig=zigzag(coords,30)
-let straight=coords
-let combo=zig.concat(straight).concat(straight)
-
-document.getElementById("downloads").innerHTML=""
-
-download("01_zigzag_30m.wpt",zig)
-download("02_straight.wpt",straight)
-download("03_zigzag_plus_two_straight.wpt",combo)
-
-}
-
-</script>
-
-</body>
-</html>
-```
+            const header = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="PikminToolV3">\n';
+            const footer = '</gpx>';
