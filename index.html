@@ -2,99 +2,104 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="utf-8">
-    <title>皮克敏最速種花生成器</title>
+    <title>皮克敏密集 WPT 三檔案生成器</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; background: #fdfdfd; }
-        .container { max-width: 700px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        h2 { color: #2e7d32; text-align: center; }
-        textarea { width: 100%; height: 200px; margin: 10px 0; padding: 10px; border: 1px solid #ccc; border-radius: 6px; font-family: monospace; }
-        .btn-group { display: flex; flex-direction: column; gap: 10px; }
-        button { padding: 15px; cursor: pointer; color: white; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; }
-        .btn-1 { background: #4caf50; } 
-        .btn-2 { background: #2196f3; } 
-        .btn-3 { background: #ff9800; }
-        button:hover { opacity: 0.9; }
-        .note { font-size: 13px; color: #666; background: #f1f8e9; padding: 15px; margin-top: 15px; border-radius: 6px; }
+        body { font-family: "Microsoft JhengHei", sans-serif; padding: 20px; background: #f0f4f0; }
+        .container { max-width: 650px; margin: auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        h2 { color: #2e7d32; text-align: center; margin-bottom: 20px; border-bottom: 2px solid #81c784; padding-bottom: 10px; }
+        textarea { width: 100%; height: 180px; margin-bottom: 15px; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-family: monospace; box-sizing: border-box; }
+        .btn-group { display: flex; flex-direction: column; gap: 12px; }
+        button { padding: 16px; cursor: pointer; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; transition: 0.3s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .btn-z { background: #4caf50; } 
+        .btn-line { background: #2196f3; } 
+        .btn-mix { background: #ff9800; }
+        button:hover { opacity: 0.9; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .desc { font-size: 13px; color: #555; background: #fffde7; padding: 15px; border-radius: 8px; margin-top: 20px; line-height: 1.6; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>🌸 皮克敏最速種花生成器</h2>
-        <textarea id="coordsInput" placeholder="請貼入座標清單..."></textarea>
+        <h2>🌸 皮克敏 WPT 路徑生成器</h2>
+        <textarea id="coordsInput" placeholder="請貼入座標清單 (緯度, 經度)"></textarea>
         
         <div class="btn-group">
-            <button class="btn-1" onclick="generate(1)">1. 效率模式 (蛇行 Z 字前進)</button>
-            <button class="btn-2" onclick="generate(2)">2. 直線串聯</button>
-            <button class="btn-3" onclick="generate(3)">3. 效率 Z 字跑一次 + 2次直線串聯</button>
+            <button class="btn-z" onclick="process(1)">1. 下載：效率模式 (每點密集 Z 字)</button>
+            <button class="btn-line" onclick="process(2)">2. 下載：直線串聯</button>
+            <button class="btn-mix" onclick="process(3)">3. 下載：綜合模式 (Z巡迴 + 2次直線)</button>
         </div>
 
-        <div class="note">
-            <strong>效率 Z 字邏輯：</strong><br>
-            系統會計算點與點之間的向量，並在移動路徑上自動產生左右各 15 公尺（半徑）的偏移點，形成蛇行軌跡。這是目前最節省花瓣且能覆蓋最大路寬的跑法。
+        <div class="desc">
+            <strong>路徑邏輯 (仿照範例檔)：</strong><br>
+            • <b>密集 Z 字</b>：每個點自動產生成 4 個 WPT 座標，形成約 30m 的密集方塊覆蓋。<br>
+            • <b>輸出格式</b>：WPT 標籤，副檔名為 .gpx。<br>
+            • <b>使用提醒</b>：請確保將您的 14 組座標貼上後再點擊按鈕。
         </div>
     </div>
 
     <script>
-        function generate(mode) {
+        function process(type) {
             const input = document.getElementById('coordsInput').value.trim();
-            if (!input) return alert('請輸入座標！');
+            if (!input) return alert('請先輸入座標！');
 
             const coords = input.split('\n').map(line => {
                 const p = line.split(/[ ,]+/);
                 return { lat: parseFloat(p[0]), lon: parseFloat(p[1]) };
             }).filter(c => !isNaN(c.lat));
 
-            let body = "";
-            const offsetDist = 0.00015; // 左右偏移約 15m，總寬 30m
+            if (coords.length === 0) return alert('座標格式不正確');
 
-            // 模式 1 & 3 的蛇行 Z 字邏輯
-            function makeEfficiencyZ(points) {
-                let s = "";
-                for (let i = 0; i < points.length - 1; i++) {
-                    const p1 = points[i];
-                    const p2 = points[i+1];
-                    
-                    // 加入起點
-                    s += `  <wpt lat="${p1.lat.toFixed(8)}" lon="${p1.lon.toFixed(8)}"><name>P${i+1}-Start</name></wpt>\n`;
-                    
-                    // 計算中點並產生偏移點 (Z 字轉折)
-                    const midLat = (p1.lat + p2.lat) / 2;
-                    const midLon = (p1.lon + p2.lon) / 2;
-                    
-                    // 簡單的法向量偏移
-                    s += `  <wpt lat="${(midLat + offsetDist).toFixed(8)}" lon="${(midLon + offsetDist).toFixed(8)}"><name>P${i+1}-Z-Left</name></wpt>\n`;
-                    s += `  <wpt lat="${(midLat - offsetDist).toFixed(8)}" lon="${(midLon - offsetDist).toFixed(8)}"><name>P${i+1}-Z-Right</name></wpt>\n`;
-                }
-                // 加入最後一個終點
-                const last = points[points.length-1];
-                s += `  <wpt lat="${last.lat.toFixed(8)}" lon="${last.lon.toFixed(8)}"><name>P-End</name></wpt>\n`;
-                return s;
-            }
+            let gpxBody = "";
+            let nameCounter = 1;
+            const d = 0.00027; // 30m 偏移量
 
-            // 直線串聯邏輯
-            function makeLinear(points, loopName) {
+            function getName() { return (nameCounter++).toString().padStart(3, '0'); }
+
+            // 每點密集 Z 字生成 (4個點形成 Z 型掃描)
+            function addDenseZ(c) {
+                const lat = c.lat;
+                const lon = c.lon;
                 let s = "";
-                points.forEach((p, idx) => {
-                    s += `  <wpt lat="${p.lat.toFixed(8)}" lon="${p.lon.toFixed(8)}"><name>${loopName}-P${idx+1}</name></wpt>\n`;
+                // 順序：左上 -> 右上 -> 左下 -> 右下 (構成密集Z)
+                const pts = [
+                    {la: lat, lo: lon},
+                    {la: lat, lo: lon + d},
+                    {la: lat - d, lo: lon},
+                    {la: lat - d, lo: lon + d}
+                ];
+                pts.forEach(p => {
+                    s += `  <wpt lat="${p.la.toFixed(8)}" lon="${p.lo.toFixed(8)}"><name>${getName()}</name></wpt>\n`;
                 });
                 return s;
             }
 
-            // --- 執行分流 ---
-            if (mode === 1 || mode === 3) {
-                body += makeEfficiencyZ(coords);
-            }
-            if (mode === 2) {
-                body += makeLinear(coords, "L1");
-            }
-            if (mode === 3) {
-                body += makeLinear(coords, "Sprint1");
-                body += makeLinear(coords, "Sprint2");
+            // 直線串聯生成
+            function addLinear(points) {
+                let s = "";
+                points.forEach(p => {
+                    s += `  <wpt lat="${p.lat.toFixed(8)}" lon="${p.lon.toFixed(8)}"><name>${getName()}</name></wpt>\n`;
+                });
+                return s;
             }
 
-            const header = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Efficiency-Pikmin">\n';
+            // 根據按鈕類型組合內容
+            let filename = "";
+            if (type === 1) {
+                filename = "效率模式_密集Z.gpx";
+                coords.forEach(c => gpxBody += addDenseZ(c));
+            } else if (type === 2) {
+                filename = "直線串聯.gpx";
+                gpxBody += addLinear(coords);
+            } else if (type === 3) {
+                filename = "綜合模式_Z加2直線.gpx";
+                coords.forEach(c => gpxBody += addDenseZ(c)); // 先跑所有點的Z
+                gpxBody += addLinear(coords); // 第一次直線
+                gpxBody += addLinear(coords); // 第二次直線
+            }
+
+            const header = '<?xml version="1.0" encoding="utf-8"?>\n<gpx version="1.1" creator="Gemini-Pikmin-V6" xmlns="http://www.topografix.com/GPX/1/1">\n';
             const footer = '</gpx>';
-            download(`Pikmin_Mode${mode}.gpx`, header + body + footer);
+            
+            download(filename, header + gpxBody + footer);
         }
 
         function download(filename, text) {
@@ -103,8 +108,10 @@
             const a = document.createElement("a");
             a.href = url;
             a.download = filename;
+            document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
         }
     </script>
 </body>
