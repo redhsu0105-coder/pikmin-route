@@ -1,79 +1,114 @@
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta charset="utf-8">
-    <title>皮克敏 WPT 綜合生成器 V3</title>
+    <title>皮克敏 WPT 路徑生成器</title>
     <style>
-        body { font-family: "Microsoft JhengHei", sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; background-color: #f0f2f5; }
-        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        h2 { color: #1b5e20; border-bottom: 2px solid #81c784; padding-bottom: 10px; }
-        textarea { width: 100%; height: 200px; margin: 15px 0; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-family: monospace; }
-        .btn-group { display: flex; gap: 10px; }
-        button { flex: 1; padding: 15px; cursor: pointer; background: #2e7d32; color: white; border: none; border-radius: 8px; font-weight: bold; }
-        button:hover { background: #1b5e20; }
-        .footer { margin-top: 20px; font-size: 0.85em; color: #666; background: #e8f5e9; padding: 10px; border-radius: 4px; }
+        body { font-family: sans-serif; padding: 20px; background: #eef2f3; line-height: 1.6; }
+        .container { background: white; padding: 25px; border-radius: 15px; max-width: 700px; margin: auto; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        h2 { color: #2e7d32; text-align: center; border-bottom: 2px solid #a5d6a7; padding-bottom: 10px; }
+        textarea { width: 100%; height: 200px; box-sizing: border-box; margin: 10px 0; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-family: monospace; font-size: 14px; }
+        .btn-group { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+        button { padding: 15px; cursor: pointer; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; transition: 0.3s; }
+        .btn-1 { background: #66bb6a; } /* 效率模式 */
+        .btn-2 { background: #42a5f5; } /* 直線串聯 */
+        .btn-3 { background: #ff7043; } /* 綜合模式 */
+        button:hover { opacity: 0.9; transform: translateY(-2px); }
+        .hint { font-size: 13px; color: #555; margin-top: 15px; background: #fff8e1; padding: 10px; border-radius: 5px; border-left: 5px solid #ffb300; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h2>🌸 皮克敏路徑工具 V3</h2>
-        <p>請貼入座標點：</p>
-        <textarea id="coordsInput" placeholder="60.1228700, 11.4626370&#10;60.1206390, 11.4612330"></textarea>
-
+    <div class="container">
+        <h2>🌸 皮克敏 WPT 路徑生成器</h2>
+        <p>請貼入座標點（格式：緯度, 經度）：</p>
+        <textarea id="coordsInput" placeholder="60.12287, 11.46263&#10;60.12063, 11.46123"></textarea>
+        
         <div class="btn-group">
-            <button onclick="buildGPX()">生成綜合模式 (每個點Z字 + 2次串聯)</button>
+            <button class="btn-1" onclick="generate(1)">1. 效率模式 (每點跑 Z 字形)</button>
+            <button class="btn-2" onclick="generate(2)">2. 直線串聯 (僅點對點)</button>
+            <button class="btn-3" onclick="generate(3)">3. 綜合模式 (每點 Z 字 + 2次直線)</button>
         </div>
 
-        <div class="footer">
-            <strong>邏輯：</strong><br>
-            1. 遍歷清單每個點，每個點原地執行 30m Z字型。<br>
-            2. 全部點跑完 Z 字後，再接續兩次完整的點對點直線串聯。
+        <div class="hint">
+            <strong>使用說明：</strong><br>
+            • <b>Z 字形半徑：</b>設定為約 30 公尺，確保種花覆蓋率。<br>
+            • <b>WPT 格式：</b>匯入後請確保模擬工具關閉「自動排序」。<br>
+            • <b>存檔提醒：</b>請確保此網頁檔案以 <b>UTF-8</b> 編碼儲存。
         </div>
     </div>
 
     <script>
-        function buildGPX() {
+        function generate(type) {
             const input = document.getElementById('coordsInput').value.trim();
-            if (!input) return alert('請輸入座標');
+            if (!input) { alert('請輸入座標！'); return; }
 
-            const coords = input.split('\n').map(line => {
-                const parts = line.split(/[ ,]+/);
-                return { lat: parseFloat(parts[0]), lon: parseFloat(parts[1]) };
-            }).filter(c => !isNaN(c.lat));
+            const lines = input.split('\n');
+            const coords = lines.map(l => {
+                const p = l.split(/[ ,]+/);
+                return { lat: parseFloat(p[0]), lon: parseFloat(p[1]) };
+            }).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
 
-            let gpxBody = "";
-            const dLat = 0.00027; // 30m 垂直
-            const dLon = 0.00045; // 30m 水平
+            if (coords.length === 0) { alert('座標格式錯誤！'); return; }
 
-            // --- 步驟一：每個座標點跑一遍 Z 字型 ---
-            coords.forEach((c, i) => {
-                const idx = i + 1;
+            let body = "";
+            const dLat = 0.00027; // 約 30m
+            const dLon = 0.00045; // 約 30-40m
+
+            // 輔助函式：生成單個點位的 Z 字 wpt 段
+            function makeZ(c, idx) {
+                let s = "";
                 const lat = c.lat;
                 const lon = c.lon;
-                
-                // 定義該點的 Z 字航點順序
-                const pts = [
+                const zPts = [
                     {la: lat, lo: lon, n: `P${idx}-Z1`},
                     {la: lat, lo: lon + dLon, n: `P${idx}-Z2`},
                     {la: lat - dLat, lo: lon + dLon, n: `P${idx}-Z3`},
                     {la: lat - dLat, lo: lon, n: `P${idx}-Z4`},
                     {la: lat - (dLat*2), lo: lon, n: `P${idx}-Z5`},
                     {la: lat - (dLat*2), lo: lon + dLon, n: `P${idx}-Z6`},
-                    {la: lat, lo: lon, n: `P${idx}-Return`} // 回到原中心點，準備去下一個大點
+                    {la: lat, lo: lon, n: `P${idx}-End`}
                 ];
-
-                pts.forEach(p => {
-                    gpxBody += `  <wpt lat="${p.la.toFixed(8)}" lon="${p.lo.toFixed(8)}"><name>${p.n}</name></wpt>\n`;
+                zPts.forEach(p => {
+                    s += `  <wpt lat="${p.la.toFixed(8)}" lon="${p.lo.toFixed(8)}"><name>${p.n}</name></wpt>\n`;
                 });
-            });
+                return s;
+            }
 
-            // --- 步驟二：跑兩次完整的直線串聯 ---
-            for (let loop = 1; loop <= 2; loop++) {
+            // --- 邏輯分支 ---
+            
+            // 選項 1 & 3: 執行每點 Z 字形
+            if (type === 1 || type === 3) {
                 coords.forEach((c, i) => {
-                    gpxBody += `  <wpt lat="${c.lat.toFixed(8)}" lon="${c.lon.toFixed(8)}"><name>Loop${loop}-P${i+1}</name></wpt>\n`;
+                    body += makeZ(c, i + 1);
                 });
             }
 
-            const header = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="PikminToolV3">\n';
+            // 選項 2 & 3: 執行直線串聯
+            if (type === 2 || type === 3) {
+                const loops = (type === 3) ? 2 : 1;
+                for (let l = 1; l <= loops; l++) {
+                    coords.forEach((c, i) => {
+                        body += `  <wpt lat="${c.lat.toFixed(8)}" lon="${c.lon.toFixed(8)}"><name>Loop${l}-P${i+1}</name></wpt>\n`;
+                    });
+                }
+            }
+
+            const header = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="PikminTool">\n';
             const footer = '</gpx>';
+            const fullContent = header + body + footer;
+
+            // 下載行為
+            const filenames = { 1: "效率模式_Z字.gpx", 2: "直線串聯.gpx", 3: "綜合模式_Z加直線.gpx" };
+            const blob = new Blob([fullContent], { type: "application/gpx+xml" });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = filenames[type];
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+    </script>
+</body>
+</html>
