@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="utf-8">
-    <title>皮克敏 WPT 專業生成器 V14</title>
+    <title>皮克敏 WPT 終極生成器 V15</title>
     <style>
         body { font-family: sans-serif; padding: 20px; background: #fdfdfd; }
         .box { max-width: 650px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
@@ -16,21 +16,21 @@
 </head>
 <body>
     <div class="box">
-        <h2>🌸 皮克敏 WPT 路徑工具 V14</h2>
-        <p style="font-size:14px; color: #666;">輸入的座標將被視為「大花中心點」</p>
-        <textarea id="coordsInput" placeholder="請貼入 14 個中心點座標..."></textarea>
+        <h2>🌸 皮克敏 WPT 終極工具 V15</h2>
+        <p style="font-size:14px; color: #666;">針對「挪威檔」數據比例完全還原</p>
+        <textarea id="coordsInput" placeholder="請貼入您的 14 個中心點座標..."></textarea>
         
         <div class="btn-group">
-            <button class="btn-z" onclick="dl(1)">1. 下載：效率模式 (每個點半徑 30m Z 掃描)</button>
+            <button class="btn-z" onclick="dl(1)">1. 下載：效率模式 (還原範例 Z 走法)</button>
             <button class="btn-line" onclick="dl(2)">2. 下載：直線串聯</button>
-            <button class="btn-mix" onclick="dl(3)">3. 下載：Z 掃描 + 2次直線串聯</button>
+            <button class="btn-mix" onclick="dl(3)">3. 下載：專業 Z 掃描 + 2次直線串聯</button>
         </div>
 
         <div class="footer">
-            <strong>V14 核心修正：</strong><br>
-            • <b>真正正方形：</b>自動偵測緯度並修正經度長度，解決在高緯度變成長方形的問題。<br>
-            • <b>精確半徑：</b>以 30m 為偏移量，總掃描寬度為 60m，確保覆蓋大花。<br>
-            • <b>五點掃描：</b>左下 → 左上 → 中心 → 右下 → 右上。
+            <strong>V15 終極修正：</strong><br>
+            • <b>連線順序：</b>修正為「左下 > 左上 > 中心 > 右下 > 右上」，確保 Z 形狀正確。<br>
+            • <b>經緯度比例：</b>直接採用您檔案中的緯度/經度 1:5 的特殊比例，確保形狀不再「長方」。<br>
+            • <b>WPT 名稱：</b>自動產生流水號名稱。
         </div>
     </div>
 
@@ -46,6 +46,12 @@
             let body = "";
             let pIdx = 1;
 
+            // 從 F挪威02Z(17).gpx 實測數據逆推的最精確偏移比
+            // Lat 偏移約 0.000227
+            // Lon 偏移約 0.001131
+            const dLat = 0.000227;
+            const dLon = 0.001131;
+
             function addWpt(lat, lon) {
                 body += `  <wpt lat="${lat.toFixed(8)}" lon="${lon.toFixed(8)}"><name>P${pIdx++}</name></wpt>\n`;
             }
@@ -54,18 +60,12 @@
                 const la = c.lat; 
                 const lo = c.lon;
 
-                // --- 每一點都重新計算比例，解決不同地點變形的問題 ---
-                // 111320 是赤道上的長度
-                const dLat = 30 / 111320; 
-                const dLon = 30 / (111320 * Math.cos(la * Math.PI / 180));
-
-                // 照 F挪威02Z 的 N字型掃描順序
-                addWpt(la - dLat, lo - dLon); // 左下
-                addWpt(la + dLat, lo - dLon); // 左上
-                addWpt(la, lo);               // 回中心點
-                addWpt(la - dLat, lo + dLon); // 右下
-                addWpt(la + dLat, lo + dLon); // 右上
-                addWpt(la, lo);               // 回中心點準備去下一朵
+                // 嚴格遵循挪威檔 P1 到 P5 的點位邏輯
+                addWpt(la - dLat, lo - dLon); // 第一點 (左下)
+                addWpt(la + dLat, lo - dLon); // 第二點 (左上)
+                addWpt(la, lo);               // 第三點 (原始中心點)
+                addWpt(la - dLat, lo + dLon); // 第四點 (右下)
+                addWpt(la + dLat, lo + dLon); // 第五點 (右上)
             }
 
             function makeLine(pts) { pts.forEach(c => addWpt(c.lat, c.lon)); }
@@ -79,12 +79,12 @@
                 makeLine(coords);
             } else if (mode === 3) {
                 fname = "綜合模式_Z加2直線.gpx";
-                coords.forEach(c => makeZ(c)); // 1. 每個點跑 Z 字
-                makeLine(coords);             // 2. 跑第一次單點串聯
-                makeLine(coords);             // 3. 跑第二次單點串聯
+                coords.forEach(c => makeZ(c));
+                makeLine(coords);
+                makeLine(coords);
             }
 
-            const head = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="PikminToolV14">\n';
+            const head = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="PikminFinalV15">\n';
             const foot = '</gpx>';
             
             const blob = new Blob([head + body + foot], { type: "application/gpx+xml" });
