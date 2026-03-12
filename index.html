@@ -3,7 +3,7 @@
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <meta charset="utf-8">
-    <title>皮克敏 WPT 綜合生成器</title>
+    <title>皮克敏 WPT 綜合生成器 V2</title>
     <style>
         body { font-family: "Microsoft JhengHei", sans-serif; max-width: 900px; margin: 20px auto; padding: 20px; background-color: #f4f7f6; }
         .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
@@ -13,27 +13,26 @@
         button { padding: 15px; cursor: pointer; background: #43a047; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; transition: all 0.2s; }
         button:hover { background: #2e7d32; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         .info { margin-top: 25px; padding: 15px; background: #e8f5e9; border-left: 5px solid #43a047; border-radius: 4px; line-height: 1.6; }
-        code { background: #fff; padding: 2px 5px; border-radius: 3px; border: 1px solid #ccc; }
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>🌸 皮克敏路徑工具 (每點 Z 字 + 兩次串聯)</h2>
+        <h2>🌸 皮克敏路徑工具 (Z字巡迴 + 兩次直線)</h2>
         <p>請貼入座標點（格式：<code>緯度, 經度</code>）：</p>
         
-        <textarea id="coordsInput" placeholder="60.1228700, 11.4626370&#10;60.1206390, 11.4612330&#10;..."></textarea>
+        <textarea id="coordsInput" placeholder="60.1228700, 11.4626370&#10;60.1206390, 11.4612330"></textarea>
 
         <div class="btn-group">
-            <button onclick="generate('z')">1. 效率 Z字形 (每點跑)</button>
-            <button onclick="generate('linear')">2. 純直線串聯</button>
-            <button onclick="generate('mixed')">3. Z + 2次直線串聯</button>
+            <button onclick="generate('z_only')">1. 僅每點 Z字巡迴</button>
+            <button onclick="generate('linear_only')">2. 僅單次直線串聯</button>
+            <button onclick="generate('combined')">3. 綜合模式 (Z巡迴+2次直線)</button>
         </div>
 
         <div class="info">
-            <strong>運作邏輯說明：</strong><br>
-            • <b>Z 字型：</b>以每個點為中心進行半徑 30m 覆蓋（寬約 40m、高約 90m 之區塊）。<br>
-            • <b>綜合模式：</b>先完成所有點的 Z 字巡迴，最後再跑兩次完整的點對點串聯。<br>
-            • <b>儲存建議：</b>存檔時編碼請選 <b>UTF-8</b>，檔名結尾須為 <b>.gpx</b>。
+            <strong>綜合模式邏輯：</strong><br>
+            1. <b>每個點位跑 Z 字</b>：從第 1 個點開始到最後一個點，每個點都會原地跑完 30m Z 字才前往下一點。<br>
+            2. <b>兩次直線衝刺</b>：上述巡迴結束後，會立刻接著跑兩次完整的 P1 到 Pn 直線路徑。<br>
+            ※ 檔案匯入 GPS JoyStick 後，請確認點位順序是否連貫。
         </div>
     </div>
 
@@ -47,54 +46,15 @@
                 return { lat: parseFloat(p[0]), lon: parseFloat(p[1]) };
             }).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
 
-            if (coords.length === 0) return alert('座標讀取失敗，請檢查格式。');
+            if (coords.length === 0) return alert('座標格式有誤。');
 
             let wpts = "";
-            const dLat = 0.00027; // 緯度偏移約 30m
-            const dLon = 0.00045; // 經度偏移約 35m (高緯度地區建議)
+            const dLat = 0.00027; // 30m
+            const dLon = 0.00045; // 35m
 
-            // --- 階段一：Z字形路徑 (針對模式 1 和 3) ---
-            if (mode === 'z' || mode === 'mixed') {
-                coords.forEach((c, i) => {
-                    const pIdx = i + 1;
-                    const lat = c.lat;
-                    const lon = c.lon;
-                    
-                    const zSet = [
-                        {la: lat, lo: lon, n: `P${pIdx}-Z1`},
-                        {la: lat, lo: lon + dLon, n: `P${pIdx}-Z2`},
-                        {la: lat - dLat, lo: lon + dLon, n: `P${pIdx}-Z3`},
-                        {la: lat - dLat, lo: lon, n: `P${pIdx}-Z4`},
-                        {la: lat - (dLat*2), lo: lon, n: `P${pIdx}-Z5`},
-                        {la: lat - (dLat*2), lo: lon + dLon, n: `P${pIdx}-Z6`},
-                        {la: lat, lo: lon, n: `P${pIdx}-Back`} // 回到原點位
-                    ];
-                    zSet.forEach(p => {
-                        wpts += `  <wpt lat="${p.la.toFixed(8)}" lon="${p.lo.toFixed(8)}"><name>${p.n}</name></wpt>\n`;
-                    });
-                });
-            }
-
-            // --- 階段二：直線串聯 (針對模式 2 和 3) ---
-            if (mode === 'linear' || mode === 'mixed') {
-                const iterations = (mode === 'mixed') ? 2 : 1;
-                for (let iter = 1; iter <= iterations; iter++) {
-                    coords.forEach((c, idx) => {
-                        wpts += `  <wpt lat="${c.lat.toFixed(8)}" lon="${c.lon.toFixed(8)}"><name>Loop${iter}-P${idx+1}</name></wpt>\n`;
-                    });
-                }
-            }
-
-            const header = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Pikmin-WPT-Tool">\n';
-            const footer = '</gpx>';
-            
-            const blob = new Blob([header + wpts + footer], { type: 'application/xml' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${mode}_path_${new Date().getTime()}.gpx`;
-            a.click();
-        }
-    </script>
-</body>
-</html>
+            // 輔助函式：產生單點的 Z 字點位
+            function getZPoints(c, pIdx) {
+                let s = "";
+                const lat = c.lat;
+                const lon = c.lon;
+                const points
