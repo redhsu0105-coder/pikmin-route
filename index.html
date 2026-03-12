@@ -1,60 +1,151 @@
+```html
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html>
 <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <meta charset="utf-8">
-    <title>皮克敏 WPT 綜合生成器 V2</title>
-    <style>
-        body { font-family: "Microsoft JhengHei", sans-serif; max-width: 900px; margin: 20px auto; padding: 20px; background-color: #f4f7f6; }
-        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-        h2 { color: #2d5a27; margin-top: 0; border-bottom: 2px solid #8bc34a; padding-bottom: 10px; }
-        textarea { width: 100%; height: 220px; margin: 15px 0; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-family: 'Consolas', monospace; font-size: 14px; box-sizing: border-box; }
-        .btn-group { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 10px; }
-        button { padding: 15px; cursor: pointer; background: #43a047; color: white; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; transition: all 0.2s; }
-        button:hover { background: #2e7d32; transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        .info { margin-top: 25px; padding: 15px; background: #e8f5e9; border-left: 5px solid #43a047; border-radius: 4px; line-height: 1.6; }
-    </style>
+<meta charset="utf-8">
+<title>Pikmin Bloom Route Generator</title>
+
+<style>
+
+body{
+font-family:Arial;
+background:#f2f2f2;
+padding:30px;
+max-width:800px;
+margin:auto
+}
+
+textarea{
+width:100%;
+height:200px;
+font-size:14px
+}
+
+button{
+padding:12px 20px;
+font-size:16px;
+margin-top:10px;
+cursor:pointer
+}
+
+.downloads a{
+display:block;
+margin-top:10px;
+font-size:16px
+}
+
+</style>
 </head>
+
 <body>
-    <div class="card">
-        <h2>🌸 皮克敏路徑工具 (Z字巡迴 + 兩次直線)</h2>
-        <p>請貼入座標點（格式：<code>緯度, 經度</code>）：</p>
-        
-        <textarea id="coordsInput" placeholder="60.1228700, 11.4626370&#10;60.1206390, 11.4612330"></textarea>
 
-        <div class="btn-group">
-            <button onclick="generate('z_only')">1. 僅每點 Z字巡迴</button>
-            <button onclick="generate('linear_only')">2. 僅單次直線串聯</button>
-            <button onclick="generate('combined')">3. 綜合模式 (Z巡迴+2次直線)</button>
-        </div>
+<h2>🌸 Pikmin Bloom WPT Route Generator</h2>
 
-        <div class="info">
-            <strong>綜合模式邏輯：</strong><br>
-            1. <b>每個點位跑 Z 字</b>：從第 1 個點開始到最後一個點，每個點都會原地跑完 30m Z 字才前往下一點。<br>
-            2. <b>兩次直線衝刺</b>：上述巡迴結束後，會立刻接著跑兩次完整的 P1 到 Pn 直線路徑。<br>
-            ※ 檔案匯入 GPS JoyStick 後，請確認點位順序是否連貫。
-        </div>
-    </div>
+<p>貼上座標 (lat,lon 一行一個)</p>
 
-    <script>
-        function generate(mode) {
-            const input = document.getElementById('coordsInput').value.trim();
-            if (!input) return alert('請輸入座標！');
+<textarea id="coords"></textarea>
 
-            const coords = input.split('\n').map(line => {
-                const p = line.split(/[ ,]+/);
-                return { lat: parseFloat(p[0]), lon: parseFloat(p[1]) };
-            }).filter(c => !isNaN(c.lat) && !isNaN(c.lon));
+<br>
 
-            if (coords.length === 0) return alert('座標格式有誤。');
+<button onclick="generate()">生成路徑</button>
 
-            let wpts = "";
-            const dLat = 0.00027; // 30m
-            const dLon = 0.00045; // 35m
+<div class="downloads" id="downloads"></div>
 
-            // 輔助函式：產生單點的 Z 字點位
-            function getZPoints(c, pIdx) {
-                let s = "";
-                const lat = c.lat;
-                const lon = c.lon;
-                const points
+<script>
+
+const R=6378137
+
+function offset(lat,lon,dx,dy){
+
+let dlat=(dy/R)*(180/Math.PI)
+
+let dlon=(dx/(R*Math.cos(lat*Math.PI/180)))*(180/Math.PI)
+
+return [lat+dlat,lon+dlon]
+
+}
+
+function zigzag(points,radius=30){
+
+let result=[]
+let toggle=1
+
+for(let i=0;i<points.length-1;i++){
+
+let [lat1,lon1]=points[i]
+let [lat2,lon2]=points[i+1]
+
+let dx=lon2-lon1
+let dy=lat2-lat1
+
+let len=Math.sqrt(dx*dx+dy*dy)
+if(len==0) continue
+
+let px=-dy/len
+let py=dx/len
+
+let ox=px*radius*toggle
+let oy=py*radius*toggle
+
+let p=offset(lat1,lon1,ox,oy)
+
+result.push([lat1,lon1])
+result.push(p)
+
+toggle*=-1
+
+}
+
+result.push(points[points.length-1])
+
+return result
+
+}
+
+function download(name,data){
+
+let text=data.map(p=>p[0]+","+p[1]).join("\n")
+
+let blob=new Blob([text],{type:"text/plain"})
+
+let a=document.createElement("a")
+
+a.href=URL.createObjectURL(blob)
+a.download=name
+a.innerText="下載 "+name
+
+document.getElementById("downloads").appendChild(a)
+
+}
+
+function generate(){
+
+let raw=document.getElementById("coords").value.trim().split("\n")
+
+let coords=[]
+
+raw.forEach(line=>{
+
+let p=line.split(",")
+
+coords.push([parseFloat(p[0]),parseFloat(p[1])])
+
+})
+
+let zig=zigzag(coords,30)
+let straight=coords
+let combo=zig.concat(straight).concat(straight)
+
+document.getElementById("downloads").innerHTML=""
+
+download("01_zigzag_30m.wpt",zig)
+download("02_straight.wpt",straight)
+download("03_zigzag_plus_two_straight.wpt",combo)
+
+}
+
+</script>
+
+</body>
+</html>
+```
