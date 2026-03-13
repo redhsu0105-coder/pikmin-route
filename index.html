@@ -2,66 +2,79 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="utf-8">
-    <title>皮克敏 WPT 終極工具箱 V20</title>
+    <title>皮克敏 WPT 工具箱 V22</title>
     <style>
         body { font-family: sans-serif; padding: 20px; background: #fdfdfd; }
         .box { max-width: 700px; margin: auto; border: 2px solid #2e7d32; padding: 25px; border-radius: 12px; background: white; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
         h2 { text-align: center; color: #2e7d32; margin-top: 0; border-bottom: 2px solid #e8f5e9; padding-bottom: 10px; }
-        textarea { width: 100%; height: 200px; margin: 10px 0; border: 1px solid #ccc; padding: 10px; box-sizing: border-box; font-family: monospace; }
+        .section-title { font-weight: bold; color: #1976d2; margin: 15px 0 5px 0; display: flex; align-items: center; }
+        .upload-section { background: #e3f2fd; border: 2px dashed #1976d2; padding: 20px; border-radius: 8px; text-align: center; margin-bottom: 20px; }
+        textarea { width: 100%; height: 160px; margin: 10px 0; border: 1px solid #ccc; padding: 10px; box-sizing: border-box; font-family: monospace; border-radius: 4px; }
         .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
         button { padding: 15px; cursor: pointer; font-weight: bold; border: none; border-radius: 6px; font-size: 15px; transition: 0.2s; }
-        .btn-convert { background: #1976d2; color: white; grid-column: span 2; }
-        .btn-plain { background: #607d8b; color: white; } /* 原始 WPT 路徑 */
+        .btn-plain { background: #607d8b; color: white; }
         .btn-z { background: #4caf50; color: white; }
-        .btn-mix { background: #ff9800; color: white; }
+        .btn-mix { background: #ff9800; color: white; grid-column: span 2; }
         button:hover { opacity: 0.9; }
-        .info { font-size: 13px; color: #555; margin-top: 15px; background: #f1f8e9; padding: 12px; border-radius: 6px; line-height: 1.6; }
+        .footer-note { font-size: 12px; color: #777; margin-top: 15px; line-height: 1.5; border-top: 1px solid #eee; padding-top: 10px; }
+        input[type="file"] { display: none; }
     </style>
 </head>
 <body>
     <div class="box">
-        <h2>🌸 皮克敏 WPT 工具箱 V20</h2>
+        <h2>🌸 皮克敏 WPT 工具箱 V22</h2>
         
-        <textarea id="coordsInput" placeholder="在此貼入：
-1. 座標清單 (緯度,經度)
-2. 或 JoyStick 導出的 GPX XML 原始碼..."></textarea>
-        
-        <div class="btn-group">
-            <button class="btn-convert" onclick="processConvert()">🔄 模式 1：JoyStick 格式直接轉 WPT</button>
-            <button class="btn-plain" onclick="dl(0)">📍 模式 2：生成原始 WPT 純路徑</button>
-            <button class="btn-z" onclick="dl(1)">⚡ 模式 3：生成 V18 密集 Z 掃描</button>
-            <button class="btn-mix" onclick="dl(3)">🌀 模式 4：Z 掃描 + 2次直線串聯</button>
+        <div class="section-title">🔄 功能一：JoyStick 檔案上傳 (rte 轉 wpt)</div>
+        <div class="upload-section">
+            <label style="background:#1976d2; color:white; padding:12px 24px; border-radius:5px; cursor:pointer; display:inline-block; font-weight:bold;">
+                選擇 GPX 檔案並自動轉換
+                <input type="file" id="fileInput" accept=".gpx">
+            </label>
+            <p id="fileName" style="font-size:12px; margin-top:10px; color:#666;">支援從 JoyStick 導出的路線檔直接轉換</p>
         </div>
 
-        <div class="info">
-            <strong>更新說明：</strong><br>
-            • <b>原始 WPT：</b>補回模式 2，直接將輸入的座標點轉為 Fake GPS 可用的 <code>&lt;wpt&gt;</code>。<br>
-            • <b>Z 字邏輯：</b>維持 V18 經過中心點最速路徑。<br>
-            • <b>支援性：</b>輸入框可識別 XML 代碼或純文字座標。
+        <hr style="border:0; border-top:1px solid #eee;">
+
+        <div class="section-title">🛠️ 功能二：座標生成 (文字輸入)</div>
+        <textarea id="coordsInput" placeholder="在此貼入原始座標點 (例如 14 個中心點)...
+24.1234, 120.5678
+24.5678, 120.9101"></textarea>
+        
+        <div class="btn-group">
+            <button class="btn-plain" onclick="dl(0)">📍 生成：原始 WPT 純路徑</button>
+            <button class="btn-z" onclick="dl(1)">⚡ 生成：密集 Z 掃描 (V18)</button>
+            <button class="btn-mix" onclick="dl(3)">🌀 生成：Z 掃描 + 2次直線串聯</button>
+        </div>
+
+        <div class="footer-note">
+            <b>操作提醒：</b><br>
+            • 使用<b>功能一</b>不需要在文字框貼東西，直接選檔案即可轉換。<br>
+            • 使用<b>功能二</b>請先在文字框貼入座標，再選你要生成的路徑模式。<br>
+            • 輸出的檔案皆為 WPT 格式，可供 Fake GPS 使用。
         </div>
     </div>
 
     <script>
-        function getCoords() {
-            const input = document.getElementById('coordsInput').value.trim();
-            if (!input) return [];
-            if (input.includes('<')) {
+        // 解析 GPX XML 或純文字
+        function parseInput(text) {
+            if (text.includes('<')) {
                 const parser = new DOMParser();
-                const xml = parser.parseFromString(input, "text/xml");
+                const xml = parser.parseFromString(text, "text/xml");
                 const points = xml.querySelectorAll('rtept, trkpt, wpt');
                 return Array.from(points).map(p => ({
                     lat: parseFloat(p.getAttribute('lat')),
                     lon: parseFloat(p.getAttribute('lon'))
                 })).filter(c => !isNaN(c.lat));
             }
-            return input.split('\n').map(l => {
+            return text.split('\n').map(l => {
                 const p = l.split(/[ ,]+/);
                 return { lat: parseFloat(p[0]), lon: parseFloat(p[1]) };
             }).filter(c => !isNaN(c.lat));
         }
 
+        // 下載檔案
         function downloadGPX(body, filename) {
-            const head = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="PikminTool-V20" xmlns="http://www.topografix.com/GPX/1/1">\n';
+            const head = '<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="PikminTool-V22" xmlns="http://www.topografix.com/GPX/1/1">\n';
             const foot = '</gpx>';
             const blob = new Blob([head + body + foot], { type: "application/gpx+xml" });
             const url = window.URL.createObjectURL(blob);
@@ -70,22 +83,31 @@
             window.URL.revokeObjectURL(url);
         }
 
-        function processConvert() {
-            const coords = getCoords();
-            if (coords.length === 0) return alert('偵測不到有效座標！');
-            let body = "";
-            coords.forEach((c, i) => {
-                body += `  <wpt lat="${c.lat.toFixed(8)}" lon="${c.lon.toFixed(8)}"><name>${String(i+1).padStart(3, '0')}</name></wpt>\n`;
-            });
-            downloadGPX(body, "JoyStick轉WPT.gpx");
-        }
+        // 功能一：檔案上傳監聽
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const coords = parseInput(e.target.result);
+                if (coords.length === 0) return alert('偵測不到座標！');
+                let body = "";
+                coords.forEach((c, i) => {
+                    body += `  <wpt lat="${c.lat.toFixed(8)}" lon="${c.lon.toFixed(8)}"><name>${String(i+1).padStart(3, '0')}</name></wpt>\n`;
+                });
+                downloadGPX(body, "轉換_" + file.name);
+            };
+            reader.readAsText(file);
+        });
 
+        // 功能二：路徑模式處理
         function dl(mode) {
-            const coords = getCoords();
-            if (coords.length === 0) return alert('請先輸入資料！');
+            const input = document.getElementById('coordsInput').value.trim();
+            const coords = parseInput(input);
+            if (coords.length === 0) return alert('請先貼入座標！');
+            
             let body = "";
             let pIdx = 1;
-
             const addWpt = (lat, lon) => {
                 body += `  <wpt lat="${lat.toFixed(8)}" lon="${lon.toFixed(8)}"><name>${String(pIdx++).padStart(3, '0')}</name></wpt>\n`;
             };
@@ -94,24 +116,26 @@
                 const la = c.lat; const lo = c.lon;
                 const dLat = 30 / 111320;
                 const dLon = 30 / (111320 * Math.cos(la * Math.PI / 180));
-                addWpt(la - dLat, lo - dLon); // 左下
-                addWpt(la + dLat, lo - dLon); // 左上
-                addWpt(la, lo);               // 中心
-                addWpt(la - dLat, lo + dLon); // 右下
-                addWpt(la + dLat, lo + dLon); // 右上
+                addWpt(la - dLat, lo - dLon); // 1.左下
+                addWpt(la + dLat, lo - dLon); // 2.左上
+                addWpt(la, lo);               // 3.中心
+                addWpt(la - dLat, lo + dLon); // 4.右下
+                addWpt(la + dLat, lo + dLon); // 5.右上
             };
 
             const makeLine = (pts) => pts.forEach(c => addWpt(c.lat, c.lon));
 
             if (mode === 0) {
-                // 原始 WPT 純路徑 (模式 2)
                 makeLine(coords);
-                downloadGPX(body, "原始WPT路徑.gpx");
-            } else {
-                // Z 字相關 (模式 3 & 4)
-                if (mode === 1 || mode === 3) coords.forEach(c => makeZ(c));
-                if (mode === 3) { makeLine(coords); makeLine(coords); }
-                downloadGPX(body, mode === 1 ? "密集Z掃描.gpx" : "綜合模式_Z加直線.gpx");
+                downloadGPX(body, "原始純路徑.gpx");
+            } else if (mode === 1) {
+                coords.forEach(c => makeZ(c));
+                downloadGPX(body, "密集Z掃描.gpx");
+            } else if (mode === 3) {
+                coords.forEach(c => makeZ(c));
+                makeLine(coords);
+                makeLine(coords);
+                downloadGPX(body, "綜合模式.gpx");
             }
         }
     </script>
